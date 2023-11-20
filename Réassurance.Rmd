@@ -1,0 +1,339 @@
+---
+output:
+  pdf_document: default
+  html_notebook: default
+  word_document: default
+---
+
+**Projet de Réassurance**
+
+**Réalisé par** : *Koudadim Olivier TRAORE*
+
+**A. Définition**
+
+La réassurance est l'opération par laquelle un assureur transfère à un réassureur tout ou une partie des risques en contrepartie du payement de primes et des commissions. La réassurance permet de protéger l'assureur contre:
+
+1.  Une mauvaise estimation de la sinistralité globale.
+2.  La survenance d'un évènement rare et coûteux.
+3.  La survenance d'un cumul de sinistres corrélés.
+
+**B. Les différents types de contrats de réassurance**
+
+On peut distinguer trois formes juridiques du contrat de réassurance :
+
+1.  Le traité : il est caractérisé par une cession obligatoire pour l'assureur et une acceptation obligatoire pour le réassureur. Le traité couvre tout le portefeuille d'une cédante dans une sous-branche sans pouvoir faire une sélection.
+2.  La facultative : couvre un ou plusieurs risques spécifiques explicitement décrits. Dans ce cas, on a une cession facultative pour l'assureur et acceptation facultative pour le réassureur.
+3.  La facultative obligatoire : cession facultative pour l'assureur et acceptation obligatoire pour le réassureur. Cette forme est peu utilisée.
+
+**C. Les différents types de réassurance**
+
+1.  ***La réassurance proportionnelle*** : La réassurance est dite proportionnelle lorsque les sinistres payés par le réassureur sont proportionnels aux primes qu'il a reçu.
+
+La Quote-part QP ou (Quota Share QS) Dans ce cas le réassureur partage une proportion ´equivalente des primes et des sinistres du portefeuille de la cédante.
+
+![](images/paste-C5030068.png)
+
+Réassurance en excédent de plein
+
+Elle concerne normalement des assurances à valeur déclarée telles que les risques incendie. L'assureur définit un plein de rétention **R**. Le réassureur prend à sa charge les capitaux assurés **C** au-delà du plein de rétention.
+
+-   Le taux de cession est calcul´e police par police :
+
+    ![](images/paste-7B931893.png){width="222"}
+
+-   L'assureur conserve ainsi la totalité des primes des contrats dont les capitaux assurés **Ci** sont inférieurs au pleins de rétention **Ri.**
+
+    La quote-part conservée pour chaque police i est : ![](images/paste-6245A2E7.png){width="72" height="19"}
+
+    ![](images/paste-0D684974.png)
+
+    **Un exemple d'application pour la réassurance proportionnelle**
+
+    Nous calculerons les Primes et les montants de dommages pour un réassureur et sa cédante sur un portefeuille d'assurance de 10 polices assurées par cette dernière. Le tableau de données est le suivant:
+
+    ![](images/paste-5CA09BDB.png){width="518"}
+
+**NB** : Les primes sont exprimes en pourcentages des capitaux assurés
+
+```{r repertoire de travail}
+setwd("C:/Users/asus/Desktop/GitHub")
+getwd()
+```
+
+```{r Importation de packages}
+# install.packages("openxlsx")
+# install.packages("readxl")
+library(openxlsx) # for the function read.xlsx()
+library(readxl)
+```
+
+```{r importation de données excel}
+data <- read_excel("re-insurance.xlsx")
+View(data)
+```
+
+***Cas d'une Réassurance en excédent de plein (réassurance proportionnelle)***
+
+```{r Calcul des taux de cession et des primes pour chaque police}
+
+n = length(data$Polices) # taille du potefeuille
+
+R_cession <- rep(x = 0.0, times = n) # Vecteur des taux de rétention par police
+Premiums <- rep(x = 0.0, times = n) # vecteur des primes par police
+
+
+for (i in 1:n)
+{
+  R_cession[i]<-(data$Capitaux[i]-data$Retention[i]) / data$Capitaux[i]
+  Premiums[i] <- data$Capitaux[i] * (data$Primes[i] * 0.01)
+  Somme_Totale_Assuree <- Somme_Totale_Assuree + data$Capitaux[i]
+}
+print(R_cession)
+print(Premiums)
+```
+
+```{r Autres quantités}
+
+Somme_Totale_Assuree <- 0     # Risque total assuré
+Somme_Totale_Retenue <- 0     # Risque total conservé
+Somme_Totale_Transferee <- 0  # Risque total cédé
+
+Total_Primes <- 0
+Total_Primes_Conserves <- 0
+Total_Primes_Cedes <- 0
+
+Total_Sinistres <- 0
+Total_Sinistres_Conserves <- 0
+Total_Sinistres_Cedes <- 0
+
+for (i in 1:n)
+{
+  Somme_Totale_Assuree <- Somme_Totale_Assuree + data$Capitaux[i]
+  Somme_Totale_Retenue <- Somme_Totale_Retenue + data$Retention[i]
+  
+  Total_Primes <- Total_Primes + Premiums[i]
+  Total_Primes_Cedes <- Total_Primes_Cedes + R_cession[i] * Premiums[i]
+  
+  Total_Sinistres <- Total_Sinistres + data$Sinistres[i]
+  Total_Sinistres_Cedes <- Total_Sinistres_Cedes + R_cession[i] * data$Sinistres[i]
+}
+Somme_Totale_Transferee <- Somme_Totale_Assuree - Somme_Totale_Retenue
+Total_Primes_Conserves <- Total_Primes - Total_Primes_Cedes
+Total_Sinistres_Conserves <- Total_Sinistres - Total_Primes_Cedes
+
+```
+
+```{r Tableau des dépenses et des primes}
+
+CAPITAUX <- c(Somme_Totale_Assuree, Somme_Totale_Retenue, Somme_Totale_Transferee)
+PRIMES <- c(Total_Primes, Total_Primes_Conserves, Total_Primes_Cedes)
+SINISTRES <- c(Total_Sinistres, Total_Sinistres_Conserves, Total_Sinistres_Cedes)
+
+Recap <- rbind(CAPITAUX, PRIMES, SINISTRES)
+
+DF <- data.frame(Recap)
+colnames(DF) <- c("Risque_Total", "Risque_Conserve", "Risque_Cede")
+print(DF)
+```
+
+***Résultat de la réassurance***
+
+Supposons que le portefeuille d'une compagnie d'assurance contient n polices. Le montant totale des sinistres est :
+
+![](images/paste-4F897031.png){width="139"}
+
+Le résultat brut de réassurance (avant réassurance) est :
+
+![](images/paste-B8DCDC90.png)
+
+**Si** : la charge annuelle des sinistres de la i-ème police **Pi = E(Si)** : la prime pure associée à la police i. **ρ** : le chargement de sécurité.
+
+Le réassureur estime que la distribution de fréquence **N** (v.a. décrivant le nombre de sinistres produits à la fin de la période de réassurance) suit une loi binomiale de paramètre **p = 0.5** et que les distributions de sévérité **Si** des polices sont ***toutes indépendantes et gaussiennes*** de paramètres:
+
+![](images/paste-461C6621.png){width="388"}
+
+```{r Importation de la loi des Sinistres}
+
+Loi <- read_excel("Loi_des_Sinistres.xlsx")
+View(Loi)
+```
+
+```{r La distribution de sinistres du porteffeuille}
+
+Mean_p <- 0
+Variance_p <- 0
+for(i in 1:n)
+{
+  Mean_p <- Mean_p + Loi$Moyennes[i]
+  Variance_p <- Variance_p + Loi$EcartTypes[i]**2
+}
+print(Mean_p)
+print(Variance_p)
+print(sqrt(Variance_p))
+```
+
+Place de variations totales des sinistres des 10 polices assurées : [ 13181412; 19378588 ]
+
+```{r}
+c(Mean_p - sqrt(Variance_p), Mean_p+sqrt(Variance_p))
+```
+
+La prime pure totale pour les polices assurées est la moyenne de la loi du portefeuille soit **16 280 000.**
+
+```{r La prime pure transférée au réassureur}
+
+PPC <- 0
+Var_PPC <- 0    # Variance sur les primes pures de réassurance
+for(i in 1:n)
+{
+  PPC <- PPC + R_cession[i] * Loi$Moyennes[i]
+  Var_PPC <- Var_PPC + Loi$EcartTypes[i] * R_cession[i]
+}
+print(PPC)
+print(sqrt(Var_PPC))
+```
+
+La prime pure totale pour les polices réassurées est : **14 327 186**
+
+Le réassureur impose un taux de chargement de sécurité **ρ= 10%** à la cédante, soit un chargement de sécurité de **1 432 719** .
+
+```{r Chargement de sécrurité}
+
+Rho = 0.1
+Chargement_Securite <- Rho * PPC
+print(Chargement_Securite)
+```
+
+La prime nette est donc : **15 759 905**
+
+```{r Prime nette}
+
+Prime_nette <- PPC + Chargement_Securite
+print(Prime_nette)
+```
+
+Le résultat brut de réassurance est alors : **793 603.2**
+
+```{r}
+
+Resultat_brut <- Prime_nette - DF[3, 3]
+print(Resultat_brut)
+```
+
+**Résultat après la réassurance**
+
+Le résultat net de réassurance (après réassurance) est donnée par : *Rn=Rb - primes cédées + sinistres à la charge du réassureur + commission de réassurance.*
+
+![](images/paste-149C80E4.png)
+
+**Pi''** : la prime commerciale associée la i-ème police **α :** la commission de réassurance : pourcentage des primes reversées par le réassureur à l'assureur à titre de participation aux frais d'acquisition et de gestion.
+
+Si l'on suppose que la prime commerciale associée la i-ème police est proportionnelle au capital réassuré par police, de coefficient de proportionnalité **coeff = 1/1000**.
+
+On suppose aussi que **α = 10%**
+
+```{r Données sur la réassurance proportionnelle}
+
+print(DF)
+```
+
+Le montant des dommages à la charge du réassureur : **14 966 301.8**
+
+Les primes cédées : **312 732.3**
+
+Capitaux réassurés : **55 330 750.0**
+
+```{r Prime commerciale}
+
+coeff <- 1/1000
+Prime_Commerciale <- coeff * DF[1,3]
+print(Prime_Commerciale)
+```
+
+La prime commerciale vaut : **55 330.75**
+
+```{r Commission de réassurance}
+
+alpha <- 0.1 # 10%
+Commission <- alpha * Prime_Commerciale
+print(Commission)
+```
+
+Commission de réassurance : **5 533.075**
+
+```{r Résultat net}
+
+
+Resultat_net <- Resultat_brut - Prime_Commerciale + DF[1,3] + Commission
+print(Resultat_net)
+```
+
+Le résultat net après réassurance de l'assureur est : **56 074 556**
+
+**Espérance de Rn**
+
+![](images/paste-B1198A69.png){width="624"}
+
+Avec
+
+![](images/paste-E6056081.png){width="622"}
+
+```{r Calcul de l\'espérance du résultat net}
+
+A <- (1+Rho) * PPC - (1-alpha) * coeff * PPC
+a <- ((1-alpha) * coeff -1)
+
+fac <- 0
+
+for (i in 1:n)
+{
+  fac <- fac + (1-R_cession[i])*Loi$Moyennes[i]
+}
+
+Esperance_Rn <- a*fac + A
+
+print(Esperance_Rn)
+```
+
+L'espérance de résultat net est : **13 795 954**
+
+**La Variance de Rn**
+
+![](images/paste-F923810D.png)
+
+```{r Variance du resultat net}
+
+Var_Rn <- 0
+
+for (i in 1:n)
+{
+  Var_Rn <- Var_Rn + (1-R_cession[i])**2 * Loi$EcartTypes[i]**2
+}
+
+print(Var_Rn)
+print(sqrt(Var_Rn))
+```
+
+Variance du résultat net : **242 208 591 644**
+
+2.  **Réassurance non-proportionnelle**
+
+    *L'excédent de sinistres (excess of loss) XS*
+
+-   ***Traité en excédent de sinistre par risque*** : Le réassureur s'engage à payer pour tous les sinistres le montant dépassant la priorité **d** dans la limite d'un montant maximal égal à la portée **p.**
+
+-   ***Traité en excédent de sinistre par évènement*** : Le réassureur s'engage à prendre à sa charge tous les sinistres causés par un même évènement( tempête, tremblement de terre, etc.) dont le montant cumulé dépasse la priorité, dans la limite d'un montant maximal égal \`a la portée.
+
+-   La somme de la priorité et de la portée correspond à une valeur appelée **plafond**.
+
+-   Si **S** est le montant d'un sinistre, le montant à la charge du réassureur sera :
+
+    ![](images/paste-44CC04AD.png)
+
+    *L'excédent de perte annuelle (stop loss)*
+
+-   Le traité en excédent de perte intervient à partir du moment ou le cumul des sinistres dépasse la priorité dans la limite d'un montant maximal égal à la portée.
+
+-   Dans ce cas la cédante cherche à se prémunir contre les mauvais résultats non plus en s'attaquant aux montants des sinistres mais en s'attaquant aux résultats eux-mêmes.
+
+-   La priorité et la portée peuvent être exprimées sous forme de ratio **S/P (stop loss)** ou sous forme de montant (aggregate loss).
