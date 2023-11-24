@@ -1,0 +1,189 @@
+---
+title: "GLM"
+author: "Koudadim Olivier TRAORE"
+date: "2023-11-23"
+output: html_document
+---
+
+# Analyse un portefeuille simple en assurance automobile - Identification des facteurs de risques déterminants pour l'assureur.
+
+## Application de Generalized Linear Models (GLM)
+
+Chaque cellule contient les données agrégées de conducteurs ayant des valeurs identiques pour les facteurs de risques suivant :
+
+-   genre : 1 = femme, 2 = homme,
+
+-   region : 1 = rurale, 2 = autre, 3 = urbaine,
+
+-   type de la voiture : 1 = petite, 2 = moyenne, 3 = grande,
+
+-   emploi : 1 = fonctionnaire/actuaire\..., 2 = entre-deux, 3 = 'dynamique'
+
+Pour chaque cellule, nous connaissons
+
+-   npol : nombre total d'assurés dans cette cellule
+
+-   n : nombre total de sinistres observés durant l'année précédente
+
+Les observations sont ordonnées de telle sorte que
+
+-   la variable **genre** est égale à 1 pour les 27 premières observations, et 2 pour les 27 dernières observations ;
+
+-   la variable **region** a trois modalités qui se produisent par blocs de 9 observations ;
+
+-   la variable **type** a trois modalités qui se produisent par blocs de 3 observations ;
+
+-   la variable **emploi** a trois modalités qui se répètent jusqu'à atteindre la 54ème observations.
+
+Les modalités des variables catégorielles peuvent être reconstruits en utilisant la fonction *gl()*. La commande *gl(n,k,N)* produit un vecteur de longueur N contenant les catégories numérotées 1 à n par blocs de longueur k. La commande *gl(n,k,N)* est équivalente à *as.factor(rep (1: n, each = k, length = N))*.
+
+```{r}
+genre <- gl(2, 27, 54); region <- gl(3, 9, 54)
+type <- gl(3, 3, 54); emploi <- gl(3, 1, 54)
+cat(' Genre', genre, '\n', 'Type', type, '\n', 'Region', region, '\n', 'Emploi', emploi)
+```
+
+Le nombre moyen de sinistres par contrat ***n/npol*** dans chaque cellule est la quantité d'intérêt.
+
+```{r nombre total de sinistres observés par année}
+
+n <- c(3, 11, 11, 6, 8, 9, 10, 2, 14, 11, 6, 9, 4, 10, 19, 9, 23, 21, 11, 12, 21, 8, 10, 16, 10, 28, 15, 5, 9, 10, 6, 17, 23, 21, 9, 16, 8, 15, 12, 11, 9, 22, 23, 15, 25, 7, 13, 20, 13, 17, 10, 8, 24, 1)
+print(n)
+```
+
+```{r Nombre de polices par cellule}
+npol = c(50,61,90, 77, 91, 75, 129, 86, 80, 145, 54, 103, 56, 76, 127, 125, 133, 96, 112, 114, 143, 98, 84, 109, 60, 123, 74, 114, 98, 113, 131, 148, 140, 140, 52, 74, 108, 132, 83, 111, 115, 129, 126, 57, 105, 68, 104, 123, 141, 92, 67, 91, 125, 63)
+print(npol)
+```
+
+Visualisaion de la base de données
+
+```{r}
+
+data <- cbind(npol, n, genre, region, type, emploi)
+head(data, 5)
+```
+
+Nous voulons lier le nombre moyen de sinistres aux facteurs de risque donné, pour établir ou analyser un système de classification pour le portefeuille. Si il s'avère que les conducteurs en milieu urbain, par exemple, ont trois fois plus de sinistres que les conducteurs en milieu rural, ils devraient, en principe, avoir une prime trois fois plus élevée. Puisque nous voulons une classification, c'est à dire, un système multiplicatif, nous allons voir si un **modèle log-linéaire** bien ajusté peut expliquer la fréquence des sinistres en fonction des facteurs de risque.
+
+Pour le **nombre de sinistres par contrat**, il est raisonnable de supposer une **distribution de Poisson**. Parce que la variance dépend de la moyenne et que nous avons un modèle multiplicatif, pas un modèle additif. Nous allons ajuster un modèle linéaire généralisé plutôt qu'un modèle linéaire ordinaire. N'ayant que des données agrégées dans chaque cellule (pas de données sur les contrats individuels), nous faisons un modèle pour le nombre moyen de sinistres par contrat, c'est à dire, pour **nmspc := n/npol**. Mais cela signifie que, mis à part la proportionnalité de la variance de la variable expliquée à la moyenne, elle doit être également à diviser par npol. Ceci est réaliser dans la commande *glm()* en indiquant qu'il existe un poids **npol** pour chaque observation / cellule, comme suit :
+
+```{r le modèle}
+nmspc <- n/npol
+glm.1 <- glm(nmspc ~ genre+region+type+emploi, fam= poisson(link=log), wei=npol)
+summary(glm.1)
+```
+
+Nous visualisons l'objet résultant de la commande glm(), nommé glm.1. Les avertissements (warnings()) proviennent du fait que les moyennes utilisées ne sont pas des nombres entiers dans la plupart des cas, et ne sont donc pas Poisson distribuées. Mise à part le fait que l'AIC ne peut pas être calculé, cela ne présente pas un problème.
+
+Par rapport à un individu ayant **la meilleur combinaison** *(genre = 1, region = 1, type = 1 et emploi = 1)*, un individu ayant la **plus mauvaise combinaison** *(genre = 2, region = 3, type = 3 et emploi = 3)*, a en moyenne 363,19 % plus de sinistres.
+
+c-à-d exp(0.09924 + 0.22637 + 0.43007 + 0.53385) = 363,19 %
+
+```{r}
+exp(0.09924 + 0.22637 + 0.43007 + 0.53385)
+```
+
+TEST DE L'EFFET DES FACTEURS
+
+**Hypothèse nulle** : **ajouter tous les facteurs *genre, region, type, emploi,* n'a en réalité aucun effet**
+
+**Hypothèse alternative : Le modèle incluant ces facteurs est explication**
+
+Dans ce cas, la différence entre la déviance du modèle nul et les modèles incorporant ces facteurs a une distribution de Khi-2 avec comme degrés de liberté le nombre de paramètres estimés. A partir des résultats du modèle *glm.1*, nous pouvons voir que le modèle incluant les facteurs à 53 − 46 = 7 paramètres de moins que le modèle nul, alors que le modèle nul a une déviance :
+
+```{r}
+126.658 - 66.419
+```
+
+**ξ =126.658 - 66.419 = 60.239**
+
+plus grande. La valeur de Khi-2 (7) au niveau de confiance 95% est **14.06714**
+
+```{r}
+qchisq(.95,7)
+```
+
+Comme, **ξ \> χ2(.95, 7),** nous pouvons conclure que le modèle incluant les facteurs est significativement meilleur.
+
+```{r Création d\'autre objet}
+glm.2 <- glm(nmspc ~ genre+region+type, fam= poisson(link=log), wei=npol)
+glm.3 <- glm(nmspc ~ genre+region, fam= poisson(link=log), wei=npol)
+glm.4 <- glm(nmspc ~ genre, fam= poisson(link=log), wei=npol)
+```
+
+```{r}
+deviances <- c(glm.1$deviance, glm.2$deviance, glm.3$deviance, glm.4$deviance)
+df <- c(glm.1$df.residual, glm.2$df.residual, glm.3$df.residual, glm.4$df.residual)
+DDF <- cbind(deviances, df)
+print(DDF)
+```
+
+```{r}
+qchisq(.95,2)
+```
+
+Khi²(0.95, 2) = 5.991465
+
+-   ajouter le facteur **emploi** (modèle glm.1) au modèle incluant les facteurs **genre, region** et **type** (modèle glm.2) permet de faire diminuer la déviance de 98.87 − 66.42 = 32.45 alors que le nombre de degré de liberté diminue de 48−46 = 2. Le gain en terme de déviance étant supérieur à la valeur de Ki²(0.95, 2), nous pouvons en conclure que le facteur **emploi** est significatif. Le modèle ***glm.1 est 'meilleur' que le glm.2.***
+
+-   ajouter le facteur **type** (modèle glm.2) au modèle incluant les facteurs **genre** et **region** (modèle glm.3) fait diminuer la déviance de 119.21 − 97.87 = 20.34 alors que le nombre de degré de liberté diminue de 50−48 = 2. Le facteur **type** est significatif. ***Le modèle glm.2 est 'meilleur' que le glm.3.***
+
+-   ajouter le facteur **region** (modèle glm.3) au modèle incluant les facteur **genre** (modèle glm.4) fait diminuer la déviance de 126.25 − 119.21 = 7.04 alors que le nombre de degré de liberté diminue de 52 − 50 = 2. Le facteur region est significatif. ***Le modèle glm.3 est 'meilleur' que le glm.4***
+
+-   ajouter le facteur genre (modèle glm.4) au modèle nul fait diminuer la déviance de 126.66 - 126.25 = 0.41 alors que le nombre de degré de liberté diminue de 53 − 52 = 1. Le gain en terme de déviance étant inférieur à la valeur de Khi²(0.95, 1) = 3.84, le facteur **genre** n'est pas significatif. ***Le modèle nul est 'meilleur' que le glm.4.***
+
+Nous pouvons comparer le modèle avec seulement les facteurs **region, type** et **emploi** au modèle incluant tous les facteurs.
+
+```{r}
+glm.5 <- glm(nmspc ~ region+type+emploi, fam= poisson(link=log), wei=npol)
+anova(glm.5, glm.1, test = "Chisq")
+
+```
+
+Nous nous apercevons que le modèle glm.5 n'est rejeté statistiquement au seuil de 95 % contre le modèle glm.1 incluant tous les facteurs. Le gain en terme de déviance, 1.6647, est inférieur à la valeur de Khi²(0.95, 1) = 3.84. En exécutant la commande
+
+```{r}
+ anova(glm.1)
+```
+
+Les facteurs sont ajoutés un par un du premier au dernier. Nous arrivons à la conclusion similaire que le **facteur genre n'est pas significatif.**
+
+Le nombre total d'assurés
+
+```{r}
+sum(npol)
+```
+
+Le nombre total de sinistres
+
+```{r}
+sum(n)
+```
+
+Le pourcentage des sinistrés : 12.65%
+
+```{r}
+sum(n)/sum(npol)
+```
+
+La valeur ajustée du modèle :
+
+```{r}
+glm.5 <- glm(n/npol ~ 1, fam= poisson(link=log), wei=npol)
+```
+
+```{r}
+fitted(glm.5)[1]
+```
+
+Cette valeur (0.1265449) correspond à la moyenne arithmétique pondérée qui diffère de la moyenne arithmétique.
+
+```{r}
+weighted.mean(n/npol, npol)
+mean(n/npol)
+```
+
+Les poids wi = npol sont nécessaires pour modéliser la fréquence des sinistres moyen d'un conducteur dans une cellule avec wi assurés. En ne prenant pas en compte les poids, on ne tient pas compte du fait que les observations dans des cellules où le nombre d'assurés est important ont été mesurées avec beaucoup plus de précision que celles dont le nombre d'assurés est faible.
+
+## FIN DU PROJET SUR "GLM" (Generalized Linear Models)
